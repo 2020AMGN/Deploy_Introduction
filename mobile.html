@@ -517,15 +517,48 @@
                 this.currentIndex = 0;
 
                 try {
-                    await this.loadImages(portfolioName);
-
-                    if (this.files.length === 0) {
-                        this.showError(`${portfolioName}에 해당하는 파일을 찾을 수 없습니다.`);
-                    } else {
-                        this.createSlides();
-                        this.showSlide(0);
-                        this.showNudgeMessage(); // 포트폴리오 로딩 성공 시 메시지 표시
+                    // 1번 이미지만 우선 체크
+                    const exts = ['jpg', 'jpeg', 'png'];
+                    let firstFound = false;
+                    let firstFile = null;
+                    for (const ext of exts) {
+                        const filename = `${portfolioName}_001.${ext}`;
+                        const url = `documentation/${filename}`;
+                        if (await this.checkFileExists(url)) {
+                            firstFile = { type: 'image', url, filename };
+                            firstFound = true;
+                            break;
+                        }
                     }
+                    if (!firstFound) {
+                        this.showError(`${portfolioName}에 해당하는 파일을 찾을 수 없습니다.`);
+                        this.isLoading = false;
+                        return;
+                    }
+                    this.files = [firstFile];
+                    this.createSlides();
+                    this.showSlide(0);
+                    this.showNudgeMessage();
+
+                    // 2~50번 이미지는 백그라운드에서 순차적으로 체크 및 추가
+                    (async () => {
+                        for (let i = 2; i <= 50; i++) {
+                            let found = false;
+                            for (const ext of exts) {
+                                const filename = `${portfolioName}_${i.toString().padStart(3, '0')}.${ext}`;
+                                const url = `documentation/${filename}`;
+                                if (await this.checkFileExists(url)) {
+                                    const fileObj = { type: 'image', url, filename };
+                                    this.files.push(fileObj);
+                                    this.addSlide(fileObj, this.files.length - 1);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) break;
+                        }
+                        this.updateDisplay();
+                    })();
                 } catch (error) {
                     console.error("포트폴리오 로딩 실패:", error);
                     this.showError('파일을 불러오는 중 오류가 발생했습니다.');
@@ -579,26 +612,29 @@
                 }
             }
 
+            addSlide(file, index) {
+                const placeholderSrc = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                const slide = document.createElement('div');
+                slide.className = 'slide';
+                if (file.type === 'image') {
+                    const img = document.createElement('img');
+                    img.src = placeholderSrc;
+                    img.dataset.src = file.url;
+                    slide.appendChild(img);
+                } else if (file.type === 'pdf') {
+                    const canvas = document.createElement('canvas');
+                    slide.appendChild(canvas);
+                }
+                this.slideContentWrapper.appendChild(slide);
+                this.slides.push(slide);
+            }
+
             createSlides() {
                 this.slideContentWrapper.innerHTML = '';
                 this.slides = [];
-                const placeholderSrc = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-
-                this.files.forEach((file, index) => {
-                    const slide = document.createElement('div');
-                    slide.className = 'slide';
-                    if (file.type === 'image') {
-                        const img = document.createElement('img');
-                        img.src = placeholderSrc;
-                        img.dataset.src = file.url;
-                        slide.appendChild(img);
-                    } else if (file.type === 'pdf') {
-                        const canvas = document.createElement('canvas');
-                        slide.appendChild(canvas);
-                    }
-                    this.slideContentWrapper.appendChild(slide);
-                    this.slides.push(slide);
-                });
+                if (this.files.length > 0) {
+                    this.addSlide(this.files[0], 0);
+                }
             }
             
             async loadSlideContent(index) {
