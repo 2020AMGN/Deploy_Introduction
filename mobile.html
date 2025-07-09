@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Portfolio Viewer Mobile</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        /* --- 1. 기본 & 변수 --- */
+        :root {
+            --font-primary: 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-dark: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            font-family: var(--font-primary);
+            background: var(--gradient-primary);
+            min-height: 100vh;
+            color: #333;
+            overflow: hidden;
+        }
+
+        /* --- 2. 레이아웃 --- */
+        .container {
+            width: 100%;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .main-layout {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100vh;
+        }
+        .viewer-area {
+            flex: 1;
+            position: relative;
+            background: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .slides-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+        #slide-content-wrapper {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        .control-panel {
+            background: var(--gradient-dark);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            flex-shrink: 0;
+        }
+
+        /* --- 3. 컴포넌트 --- */
+        .slide-overlay-controls {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            z-index: 250;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 0px;
+            border-radius: 10px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: opacity 0.3s ease;
+        }
+        .page-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: 'Inter', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            padding: 0 8px;
+        }
+        .fullscreen-btn {
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+        }
+        .fullscreen-icon {
+            width: 20px;
+            height: 20px;
+            position: relative;
+        }
+        .fullscreen-icon::before,
+        .fullscreen-icon::after {
+            content: '';
+            position: absolute;
+            border: 2px solid currentColor;
+        }
+        .fullscreen-icon.expand::before {
+            top: 0; left: 0; width: 8px; height: 8px;
+            border-right: none; border-bottom: none;
+        }
+        .fullscreen-icon.expand::after {
+            bottom: 0; right: 0; width: 8px; height: 8px;
+            border-left: none; border-top: none;
+        }
+        .fullscreen-icon.compress::before {
+            top: 4px; left: 4px; width: 6px; height: 6px;
+            border-right: none; border-bottom: none;
+        }
+        .fullscreen-icon.compress::after {
+            bottom: 4px; right: 4px; width: 6px; height: 6px;
+            border-left: none; border-top: none;
+        }
+        
+        .control-section { 
+            margin-bottom: 10px; 
+        }
+        .section-title {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 3px;
+        }
+        .control-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .control-btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 8px 6px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            min-height: 35px;
+            line-height: 1.2;
+        }
+        .slide {
+            width: 100%;
+            height: 100%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: fadeIn 0.3s ease-in-out;
+            padding: 15px;
+        }
+        .slide img,
+        .slide canvas {
+            max-width: calc(100% - 30px);
+            max-height: calc(100% - 30px);
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 새로운 좌우 버튼 스타일 */
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 50%;
+            z-index: 150;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(5px);
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+        }
+        .nav-btn:active {
+            transform: translateY(-50%) scale(0.9);
+            background: rgba(0, 0, 0, 0.5);
+        }
+        .nav-btn.prev {
+            left: 10px;
+            padding-right : 1px;
+            padding-bottom : 2px;
+        }
+        .nav-btn.next {
+            right: 10px;
+            padding-left : 1px;
+            padding-bottom : 2px;
+        }
+        .viewer-area:fullscreen .nav-btn { /* 전체화면일 때 버튼이 더 잘보이도록 */
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        /* 안내 메시지 스타일 */
+        .nudge-message {
+            position: absolute;
+            top: 20px; /* 하단 컨트롤러 약간 위 */
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #3a4a6d, #2c3e50);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            z-index: 300;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.5s ease;
+        }
+        .nudge-message.show {
+            opacity: 1;
+            visibility: visible;
+            animation: nudge-fade 5s ease-in-out forwards;
+        }
+
+        @keyframes nudge-fade {
+            0%, 100% {
+                opacity: 0;
+                visibility: hidden;
+            }
+            10%, 80% {
+                opacity: 1;
+                visibility: visible;
+            }
+        }
+
+        /* --- 4. 상태 & 테마 --- */
+        .slide.active {
+            display: flex;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        .fullscreen-btn:active {
+            transform: scale(0.95);
+        }
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+        .control-btn.active {
+            background: var(--gradient-primary);
+        }
+        .control-btn.download-btn {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+        }
+        
+        .loading, .error {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .loading {
+            color: #fff;
+        }
+        .error {
+            color: #e74c3c;
+            text-align: center;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #333;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* --- 5. 전체화면 --- */
+        .viewer-area:fullscreen {
+            background: #000 !important;
+        }
+        .viewer-area:fullscreen .slide {
+            padding: 5px !important;
+        }
+        .viewer-area:fullscreen .slide img, 
+        .viewer-area:fullscreen .slide canvas {
+            max-width: calc(100% - 10px) !important;
+            max-height: calc(100% - 10px) !important;
+            border-radius: 0 !important;
+        }
+        .viewer-area:fullscreen .slide-overlay-controls {
+            bottom: 20px; right: 20px;
+        }
+
+        /* 가로 모드 레이아웃 */
+        @media screen and (orientation: landscape) {
+            .main-layout {
+                flex-direction: row;
+            }
+            .control-panel {
+                width: 260px;
+                height: 100vh;
+                border-top: none;
+                border-left: 1px solid rgba(255, 255, 255, 0.1);
+                overflow-y: auto;
+                padding: 15px;
+            }
+            .control-grid {
+                grid-template-columns: 1fr; 
+            }
+            .control-btn {
+                padding: 12px 8px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-layout">
+            <div class="viewer-area" id="viewer">
+                <div class="slides-container" id="slides-container">
+                    <div id="slide-content-wrapper">
+                        <div class="loading"><div class="spinner"></div><p>포트폴리오를 불러오는 중...</p></div>
+                    </div>
+                    
+                    <button class="nav-btn prev" onclick="previousSlide()">‹</button>
+                    <button class="nav-btn next" onclick="nextSlide()">›</button>
+
+                    <div class="nudge-message" id="nudge-message">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        <span>좌우 버튼으로 슬라이드를 넘길 수 있습니다.</span>
+                    </div>
+
+                    <div class="slide-overlay-controls">
+                        <div class="page-info">
+                            <span><span id="viewer-current">0</span> / <span id="viewer-total">0</span></span>
+                        </div>
+                        <button class="fullscreen-btn" onclick="toggleFullScreen()">
+                            <div class="fullscreen-icon expand"></div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="control-panel">
+                <div class="control-section">
+                    <div class="section-title">포트폴리오</div>
+                    <div class="control-grid">
+                        <button class="control-btn" onclick="changePortfolio('아무고나제작소')">아무고나제작소</button>
+                        <button class="control-btn" onclick="changePortfolio('상상을현실로')">상상을현실로</button>
+                        <button class="control-btn" onclick="changePortfolio('쿠라운드')">쿠라운드</button>
+                        <button class="control-btn" onclick="changePortfolio('메이커고나')">메이커고나</button>
+                    </div>
+                </div>
+                <div class="control-section">
+                    <div class="section-title">다운로드</div>
+                    <div class="control-grid">
+                        <button class="control-btn download-btn" onclick="downloadCurrent()">현재 페이지</button>
+                        <button class="control-btn download-btn" onclick="downloadAllAsPDF()">전체 PDF</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class MobileDocumentViewer {
+            constructor() {
+                this.currentIndex = 0;
+                this.files = [];
+                this.slides = [];
+                this.pdfDoc = null;
+                this.currentPortfolioName = '';
+                this.touchStartX = 0;
+                this.touchEndX = 0;
+                this.isLoading = false;
+
+                this.viewer = document.getElementById('viewer');
+                this.slideContentWrapper = document.getElementById('slide-content-wrapper');
+                this.nudgeMessage = document.getElementById('nudge-message'); // 안내 메시지 요소 추가
+
+                this.init();
+            }
+
+            async init() {
+                this.setupTouchNavigation();
+                this.setupKeyboardNav();
+                this.setupFullscreenDetection();
+                await this.changePortfolio('아무고나제작소');
+            }
+
+            setupFullscreenDetection() {
+                document.addEventListener('fullscreenchange', this.handleFullscreenChange.bind(this));
+                document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange.bind(this));
+            }
+
+            handleFullscreenChange() {
+                const fullscreenBtnIcon = document.querySelector('.fullscreen-btn .fullscreen-icon');
+                if (!fullscreenBtnIcon) return;
+                const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                fullscreenBtnIcon.classList.toggle('expand', !isFullscreen);
+                fullscreenBtnIcon.classList.toggle('compress', isFullscreen);
+
+                if (!isFullscreen) { // 전체화면이 해제될 때
+                    this.showNudgeMessage();
+                }
+            }
+
+            setupTouchNavigation() {
+                this.viewer.addEventListener('touchstart', e => this.touchStartX = e.changedTouches[0].screenX, { passive: true });
+                this.viewer.addEventListener('touchend', e => {
+                    this.touchEndX = e.changedTouches[0].screenX;
+                    this.handleSwipe();
+                }, { passive: true });
+            }
+
+            handleSwipe() {
+                const swipeThreshold = 50;
+                const diff = this.touchStartX - this.touchEndX;
+                if (Math.abs(diff) > swipeThreshold) {
+                    if (diff > 0) this.nextSlide();
+                    else this.previousSlide();
+                }
+            }
+
+            setupKeyboardNav() {
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowLeft') this.previousSlide();
+                    else if (e.key === 'ArrowRight') this.nextSlide();
+                    else if (e.key === 'f' || e.key === 'F') toggleFullScreen();
+                });
+            }
+
+            updateDisplay() {
+                const currentSpan = document.getElementById('viewer-current');
+                const totalSpan = document.getElementById('viewer-total');
+                if (currentSpan) currentSpan.textContent = this.files.length > 0 ? this.currentIndex + 1 : 0;
+                if (totalSpan) totalSpan.textContent = this.files.length;
+            }
+
+            async changePortfolio(portfolioName) {
+                if (this.isLoading) return;
+                this.currentPortfolioName = portfolioName;
+                document.querySelectorAll('.control-panel .control-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.textContent.trim() === portfolioName);
+                });
+                await this.loadPortfolio(portfolioName);
+            }
+
+            async loadPortfolio(portfolioName) {
+                this.isLoading = true;
+                this.showLoading();
+                this.pdfDoc = null;
+                this.files = [];
+                this.slides = [];
+                this.currentIndex = 0;
+
+                try {
+                    await this.loadImages(portfolioName);
+
+                    if (this.files.length === 0) {
+                        this.showError(`${portfolioName}에 해당하는 파일을 찾을 수 없습니다.`);
+                    } else {
+                        this.createSlides();
+                        this.showSlide(0);
+                        this.showNudgeMessage(); // 포트폴리오 로딩 성공 시 메시지 표시
+                    }
+                } catch (error) {
+                    console.error("포트폴리오 로딩 실패:", error);
+                    this.showError('파일을 불러오는 중 오류가 발생했습니다.');
+                } finally {
+                    this.isLoading = false;
+                }
+            }
+            
+            showNudgeMessage() {
+                if (!this.nudgeMessage) return;
+                // 전체화면이 아닐 때만 메시지를 보여줍니다.
+                if (!document.fullscreenElement) {
+                    this.nudgeMessage.classList.remove('show');
+                    void this.nudgeMessage.offsetWidth; // 리플로우 강제
+                    this.nudgeMessage.classList.add('show');
+                }
+            }
+
+            async checkFileExists(url) {
+                try {
+                    const response = await fetch(url, { method: 'HEAD' });
+                    return response.ok;
+                } catch {
+                    return false;
+                }
+            }
+
+            async loadPDF(pdfUrl) {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+                const loadingTask = pdfjsLib.getDocument(pdfUrl);
+                this.pdfDoc = await loadingTask.promise;
+                for (let i = 1; i <= this.pdfDoc.numPages; i++) {
+                    this.files.push({ type: 'pdf', page: i });
+                }
+            }
+
+            async loadImages(portfolioName) {
+                const exts = ['jpg', 'jpeg', 'png'];
+                for (let i = 1; i <= 50; i++) {
+                    let found = false;
+                    for (const ext of exts) {
+                        const filename = `${portfolioName}_${i.toString().padStart(3, '0')}.${ext}`;
+                        const url = `documentation/${filename}`;
+                        if (await this.checkFileExists(url)) {
+                            this.files.push({ type: 'image', url: url, filename: filename });
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found && this.files.length > 0) break;
+                }
+            }
+
+            createSlides() {
+                this.slideContentWrapper.innerHTML = '';
+                this.slides = [];
+                const placeholderSrc = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+                this.files.forEach((file, index) => {
+                    const slide = document.createElement('div');
+                    slide.className = 'slide';
+                    if (file.type === 'image') {
+                        const img = document.createElement('img');
+                        img.src = placeholderSrc;
+                        img.dataset.src = file.url;
+                        slide.appendChild(img);
+                    } else if (file.type === 'pdf') {
+                        const canvas = document.createElement('canvas');
+                        slide.appendChild(canvas);
+                    }
+                    this.slideContentWrapper.appendChild(slide);
+                    this.slides.push(slide);
+                });
+            }
+            
+            async loadSlideContent(index) {
+                if (index < 0 || index >= this.slides.length) return;
+                const slide = this.slides[index];
+                if (slide.dataset.loaded === 'true') return;
+
+                const file = this.files[index];
+                if (file.type === 'image') {
+                    const img = slide.querySelector('img');
+                    if (img && img.dataset.src) {
+                        img.src = img.dataset.src;
+                        img.onload = () => { slide.dataset.loaded = 'true'; };
+                    }
+                } else if (file.type === 'pdf') {
+                    const canvas = slide.querySelector('canvas');
+                    if (canvas) {
+                        await this.renderPDFPage(canvas, file.page);
+                        slide.dataset.loaded = 'true';
+                    }
+                }
+            }
+
+            async renderPDFPage(canvas, pageNumber) {
+                if (!this.pdfDoc) return;
+                const page = await this.pdfDoc.getPage(pageNumber);
+                const viewport = page.getViewport({ scale: 2.0 });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            }
+
+            showSlide(index) {
+                if (this.slides.length === 0) return;
+                this.slides.forEach((slide, i) => slide.classList.toggle('active', i === index));
+                this.currentIndex = index;
+                this.loadSlideContent(index);
+                this.loadSlideContent(index - 1);
+                this.loadSlideContent(index + 1);
+                this.updateDisplay();
+            }
+
+            previousSlide() {
+                if (this.files.length <= 1) return;
+                const newIndex = (this.currentIndex - 1 + this.files.length) % this.files.length;
+                this.showSlide(newIndex);
+            }
+
+            nextSlide() {
+                if (this.files.length <= 1) return;
+                const newIndex = (this.currentIndex + 1) % this.files.length;
+                this.showSlide(newIndex);
+            }
+
+            showLoading() { this.slideContentWrapper.innerHTML = `<div class="loading"><div class="spinner"></div><p>포트폴리오를 불러오는 중...</p></div>`; }
+            showError(message) { this.slideContentWrapper.innerHTML = `<div class="error"><h3>오류</h3><p>${message}</p></div>`; this.updateDisplay(); }
+        }
+
+        const viewer = new MobileDocumentViewer();
+        
+        function changePortfolio(name) { viewer.changePortfolio(name); }
+        function previousSlide() { viewer.previousSlide(); }
+        function nextSlide() { viewer.nextSlide(); }
+        
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                viewer.viewer.requestFullscreen?.();
+            } else {
+                document.exitFullscreen?.();
+            }
+        }
+        
+        function downloadCurrent() {
+            if (viewer.files.length === 0) return;
+            const file = viewer.files[viewer.currentIndex];
+            if (file.type === 'image') {
+                const link = document.createElement('a');
+                link.href = file.url;
+                link.download = file.filename;
+                link.click();
+            } else {
+                alert("PDF의 단일 페이지 다운로드는 '전체 PDF' 기능을 이용해주세요.");
+            }
+        }
+        
+        function downloadAllAsPDF() {
+            if (!viewer || !viewer.currentPortfolioName) {
+                alert("다운로드할 파일이 없습니다.");
+                return;
+            }
+            const portfolioName = viewer.currentPortfolioName;
+            const pdfUrl = `documentation/${portfolioName}.pdf`;
+
+            fetch(pdfUrl, { method: 'HEAD' })
+                .then(response => {
+                    if (response.ok) {
+                        const link = document.createElement('a');
+                        link.href = pdfUrl;
+                        link.download = `${portfolioName}.pdf`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    } else {
+                        alert("해당 포트폴리오 PDF 파일이 존재하지 않습니다.");
+                    }
+                })
+                .catch(() => {
+                    alert("PDF 파일을 확인할 수 없습니다.");
+                });
+        }
+    </script>
+</body>
+</html>

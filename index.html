@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Portfolio</title>
+    <style>
+        /* 사용자가 리디렉션 동안 흰 화면만 보지 않도록 간단한 로딩 스타일 추가 */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #2c3e50;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: white;
+        }
+        .loading-text::after {
+            content: '...';
+            animation: dots 1.4s infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40%, 60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+    </style>
+</head>
+<body>
+    <h1 class="loading-text">Loading</h1>
+
+    <script>
+        // 즉시 실행 함수(IIFE)로 스크립트를 캡슐화합니다.
+        (function() {
+            const userAgent = navigator.userAgent;
+            const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+            const isSmallScreen = window.innerWidth <= 800;
+            const isMobile = isMobileUA || isSmallScreen;
+
+            const destination = isMobile ? 'mobile.html' : 'desktop.html';
+            window.location.replace(destination);
+        })();
+    </script>
+</body>
+</html>
